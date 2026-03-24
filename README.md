@@ -168,7 +168,7 @@ src/
 │   ├── vga.c / vga.h     # VGA text-mode driver (0xB8000)
 │   ├── keyboard.c        # Keyboard IRQ1 handler & scancode decoder
 │   └── io.h              # inb() / outb() inline assembly
-├── mm/
+├── memory/
 │   ├── pmm.c / pmm.h     # Physical memory manager (bitmap allocator)
 │   └── heap.c / heap.h   # Kernel heap (kmalloc / kfree)
 ├── fs/
