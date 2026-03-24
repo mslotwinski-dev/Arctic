@@ -18,7 +18,7 @@ stack_top:
 
 section .text
 global _start
-extern kernel_main    
+extern kernel_main
 
 _start:
     mov esp, stack_top
