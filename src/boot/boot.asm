@@ -22,6 +22,12 @@ extern kernel_main
 
 _start:
     mov esp, stack_top
+    
+    ; Test: write 'A' directly to VGA memory at 0xB8000
+    mov eax, 0xB8000
+    mov byte [eax], 'A'        ; Character
+    mov byte [eax + 1], 0x0F   ; Color (white on black)
+    
     call kernel_main  
     cli
 .hang:

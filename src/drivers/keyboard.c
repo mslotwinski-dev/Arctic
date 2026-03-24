@@ -28,18 +28,8 @@ static unsigned char ps2_shifted[] = {0,    27,  '!', '@', '#', '$', '%', '^', '
 static uint8_t shift_pressed = 0;
 
 void ps2_init(void) {
-  // Czekaj aż input buffer będzie pusty
-  while (inb(PS2_STATUS_PORT) & PS2_STATUS_INPUT_BUFFER);
-
-  // Wyślij disable scanning
-  outb(PS2_CMD_PORT, 0xAD);
-
-  // Flush output buffer
-  while (inb(PS2_STATUS_PORT) & PS2_STATUS_OUTPUT_BUFFER) {
-    inb(PS2_DATA_PORT);
-  }
-
-  // Enable scanning
+  // Minimal PS2 init - skip blocking waits
+  // Just enable scanning
   outb(PS2_CMD_PORT, 0xAE);
 }
 
@@ -74,35 +64,32 @@ char ps2_scancode_to_ascii(uint8_t scancode) {
 
 void keyboard_init(void) {
   ps2_init();
-  pic_clear_irq_mask(0);  // Włącz IRQ0 (timer) dla debug'u
-  pic_clear_irq_mask(1);  // Włącz IRQ1 (keyboard)
+  pic_clear_irq_mask(0);  // Enable IRQ0 (timer)
+  pic_clear_irq_mask(1);  // Enable IRQ1 (keyboard)
+  println("KBD: IRQs unmask");
 }
 
 static uint32_t timer_ticks = 0;
 
 void timer_handler(void) {
   timer_ticks++;
-  if (timer_ticks % 18 == 0) {  // Co około sekundy (18.2Hz)
-    printc('.');
-  }
+
+  // Print dot for every 10th interrupt (approximately 1 per second at 100Hz)
+  // if (timer_ticks % 10 == 0) {
+  // printc('.');
+  // }
   pic_send_eoi(0);
 }
 
 void keyboard_handler(void) {
-  // DEBUG: sprawdź czy handler się wywoła
-  printc('X');
+  // Debug: verify handler is called
+  // printc('K');
 
-  // Czytaj scancode non-blocking
-  if (inb(PS2_STATUS_PORT) & PS2_STATUS_OUTPUT_BUFFER) {
+  // Non-blocking scancode read
+  uint8_t status = inb(PS2_STATUS_PORT);
+  if (status & PS2_STATUS_OUTPUT_BUFFER) {
     uint8_t scancode = inb(PS2_DATA_PORT);
     char c = ps2_scancode_to_ascii(scancode);
-
-    // Debug: pokaż kod scanu
-    printc('[');
-    printc('0' + (scancode / 100) % 10);
-    printc('0' + (scancode / 10) % 10);
-    printc('0' + scancode % 10);
-    printc(']');
 
     if (c != 0) {
       printc(c);

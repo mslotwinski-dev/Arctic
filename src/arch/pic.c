@@ -10,26 +10,39 @@ static inline uint8_t inb(uint16_t port) {
   return value;
 }
 
+// IO wait - PIC potrzebuje czasu między komendami
+static inline void io_wait(void) { __asm__ __volatile__("outb %%al, $0x80" : : "a"(0)); }
+
 void pic_init(void) {
   // ICW1 - start inicjalizacji
   outb(PIC_MASTER_CMD, 0x11);
+  io_wait();
   outb(PIC_SLAVE_CMD, 0x11);
+  io_wait();
 
   // ICW2 - ustaw base vectors
   outb(PIC_MASTER_DATA, 0x20);  // Master IRQ0 -> INT32
-  outb(PIC_SLAVE_DATA, 0x28);   // Slave IRQ0 -> INT40
+  io_wait();
+  outb(PIC_SLAVE_DATA, 0x28);  // Slave IRQ0 -> INT40
+  io_wait();
 
   // ICW3 - setup cascading
   outb(PIC_MASTER_DATA, 1 << 2);  // Slave na IRQ2
-  outb(PIC_SLAVE_DATA, 2);        // Slave cascade identity
+  io_wait();
+  outb(PIC_SLAVE_DATA, 2);  // Slave cascade identity
+  io_wait();
 
   // ICW4 - 8086 mode
   outb(PIC_MASTER_DATA, 0x01);
+  io_wait();
   outb(PIC_SLAVE_DATA, 0x01);
+  io_wait();
 
   // Mask all IRQs initially (0xFF = all masked)
   outb(PIC_MASTER_DATA, 0xFF);
+  io_wait();
   outb(PIC_SLAVE_DATA, 0xFF);
+  io_wait();
 }
 
 void pic_send_eoi(uint8_t irq) {
