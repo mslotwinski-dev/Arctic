@@ -21,6 +21,24 @@ void clear(void) {
 }
 
 void printc(const char c) {
+  if (c == '\b') {
+    if (cursor_x == 0 && cursor_y == 0) {
+      return;
+    }
+
+    if (cursor_x > 0) {
+      cursor_x--;
+    } else {
+      cursor_y--;
+      cursor_x = VGA_WIDTH - 1;
+    }
+
+    int index = (cursor_y * VGA_WIDTH + cursor_x) * 2;
+    video_memory[index] = ' ';
+    video_memory[index + 1] = 0x0F;
+    return;
+  }
+
   if (c == '\n') {
     cursor_y++;
     cursor_x = 0;

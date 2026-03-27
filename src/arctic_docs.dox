@@ -1,0 +1,54 @@
+/**
+ * @file arctic_docs.dox
+ * @brief High-level documentation pages and module groups for Arctic.
+ */
+
+/**
+ * @defgroup kernel_core Kernel Core
+ * @brief Kernel entry logic, initialization order, and global runtime flow.
+ */
+
+/**
+ * @defgroup arch_x86 x86 Architecture Layer
+ * @brief CPU descriptor tables, interrupt routing, and platform timers/controllers.
+ */
+
+/**
+ * @defgroup memory_subsystem Memory Subsystem
+ * @brief Physical/virtual memory and dynamic kernel allocation.
+ */
+
+/**
+ * @defgroup io_subsystem I/O Subsystem
+ * @brief Text output and device-level keyboard input.
+ */
+
+/**
+ * @defgroup fs_subsystem Filesystem Subsystem
+ * @brief Initrd parsing and minimal virtual file abstraction.
+ */
+
+/**
+ * @defgroup proc_subsystem Process and Syscall Subsystem
+ * @brief ELF loading and syscall dispatch entry points.
+ */
+
+/**
+ * @page architecture Architecture Overview
+ *
+ * Arctic is organized as small, focused subsystems with explicit dependencies:
+ * - Boot code enters @ref kernel_core.
+ * - Kernel initialization configures @ref arch_x86.
+ * - Memory is established through @ref memory_subsystem.
+ * - Terminal and keyboard are exposed by @ref io_subsystem.
+ * - Optional initrd-backed files are served by @ref fs_subsystem.
+ * - ELF and syscalls are exposed through @ref proc_subsystem.
+ *
+ * Typical startup order:
+ * 1. CPU enters kernel entry point (boot assembly -> kernel C entry).
+ * 2. GDT, IDT, PIC, PIT initialization.
+ * 3. PMM initialization from Multiboot map.
+ * 4. Heap initialization using PMM frames.
+ * 5. Initrd and VFS bring-up when a module is provided by bootloader.
+ * 6. Optional runtime smoke tests and syscall/ELF probes.
+ */

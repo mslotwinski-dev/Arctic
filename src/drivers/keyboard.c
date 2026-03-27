@@ -14,6 +14,7 @@ static inline void outb(uint16_t port, uint8_t data) {
 }
 
 #define SHIFT_FLAG 0x80
+#define KBD_BUFFER_SIZE 128
 
 static unsigned char ps2_normal[] = {0,    27,  '1', '2', '3', '4', '5', '6', '7', '8', '9',  '0', '-', '=',  '\b',
                                      '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',  '[', ']', '\n', 0,
@@ -26,6 +27,33 @@ static unsigned char ps2_shifted[] = {0,    27,  '!', '@', '#', '$', '%', '^', '
                                       'X',  'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0,   '*', 0,   ' ', 0};
 
 static uint8_t shift_pressed = 0;
+static char kbd_buffer[KBD_BUFFER_SIZE];
+static uint32_t kbd_head = 0;
+static uint32_t kbd_tail = 0;
+
+static void keyboard_push_char(char c) {
+  uint32_t next_head = (kbd_head + 1U) % KBD_BUFFER_SIZE;
+  if (next_head == kbd_tail) {
+    return;
+  }
+
+  kbd_buffer[kbd_head] = c;
+  kbd_head = next_head;
+}
+
+int keyboard_pop_char(char* out_char) {
+  if (out_char == 0) {
+    return 0;
+  }
+
+  if (kbd_head == kbd_tail) {
+    return 0;
+  }
+
+  *out_char = kbd_buffer[kbd_tail];
+  kbd_tail = (kbd_tail + 1U) % KBD_BUFFER_SIZE;
+  return 1;
+}
 
 void ps2_init(void) {
   // Minimal PS2 init - skip blocking waits
@@ -92,6 +120,7 @@ void keyboard_handler(void) {
     char c = ps2_scancode_to_ascii(scancode);
 
     if (c != 0) {
+      keyboard_push_char(c);
       printc(c);
     }
   }
