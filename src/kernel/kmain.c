@@ -12,6 +12,7 @@
 #include "../memory/paging.h"
 #include "../memory/pmm.h"
 #include "../proc/elf.h"
+#include "../proc/syscall.h"
 
 /**
  * @file kmain.c
@@ -58,6 +59,30 @@ static void print_uint(uint32_t value) {
   for (int i = pos - 1; i >= 0; i--) {
     printc(buffer[i]);
   }
+}
+
+static uint32_t syscall0(uint32_t number) {
+  uint32_t ret;
+  __asm__ __volatile__("int $0x80" : "=a"(ret) : "a"(number) : "memory");
+  return ret;
+}
+
+static uint32_t syscall1(uint32_t number, uint32_t arg1) {
+  uint32_t ret;
+  __asm__ __volatile__("int $0x80" : "=a"(ret) : "a"(number), "b"(arg1) : "memory");
+  return ret;
+}
+
+static uint32_t syscall3(uint32_t number, uint32_t arg1, uint32_t arg2, uint32_t arg3) {
+  uint32_t ret;
+  __asm__ __volatile__("int $0x80" : "=a"(ret) : "a"(number), "b"(arg1), "c"(arg2), "d"(arg3) : "memory");
+  return ret;
+}
+
+static uint32_t syscall4(uint32_t number, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4) {
+  uint32_t ret;
+  __asm__ __volatile__("int $0x80" : "=a"(ret) : "a"(number), "b"(arg1), "c"(arg2), "d"(arg3), "S"(arg4) : "memory");
+  return ret;
 }
 
 void kernel_main(uint32_t magic, uint32_t multiboot_info) __asm__("kernel_main");
@@ -164,7 +189,10 @@ static void run_syscall_smoke_test(void) {
   static const char msg[] = "[sys_write via int 0x80]\n";
   uint32_t written;
 
-  __asm__ __volatile__("int $0x80" : "=a"(written) : "a"(1U), "b"(1U), "c"(msg), "d"((uint32_t)(sizeof(msg) - 1U)) : "memory");
+  __asm__ __volatile__("int $0x80"
+                       : "=a"(written)
+                       : "a"(SYS_WRITE), "b"(1U), "c"(msg), "d"((uint32_t)(sizeof(msg) - 1U))
+                       : "memory");
 
   print("sys_write ret=");
   print_uint(written);
@@ -179,17 +207,55 @@ static void run_syscall_smoke_test(void) {
     uint32_t seek_ret;
     uint32_t read_b;
     uint32_t close_ret;
+    uint32_t files_total;
+    uint32_t files_pref;
+    uint32_t name_len;
+    uint32_t pref_name_len;
+    uint32_t file_size;
+    uint32_t file_size_by_name;
     uint32_t same = 1U;
+    char name_buf[64];
+    char pref_buf[64];
+    static const char prefix_all[] = "";
 
     if (name == 0) {
       return;
     }
 
-    __asm__ __volatile__("int $0x80" : "=a"(fd) : "a"(3U), "b"((uint32_t)name) : "memory");
-    __asm__ __volatile__("int $0x80" : "=a"(read_a) : "a"(2U), "b"(fd), "c"((uint32_t)buffer_a), "d"(8U) : "memory");
-    __asm__ __volatile__("int $0x80" : "=a"(seek_ret) : "a"(5U), "b"(fd), "c"(0U), "d"(0U) : "memory");
-    __asm__ __volatile__("int $0x80" : "=a"(read_b) : "a"(2U), "b"(fd), "c"((uint32_t)buffer_b), "d"(8U) : "memory");
-    __asm__ __volatile__("int $0x80" : "=a"(close_ret) : "a"(4U), "b"(fd) : "memory");
+    __asm__ __volatile__("int $0x80" : "=a"(fd) : "a"(SYS_OPEN), "b"((uint32_t)name) : "memory");
+    __asm__ __volatile__("int $0x80"
+                         : "=a"(read_a)
+                         : "a"(SYS_READ), "b"(fd), "c"((uint32_t)buffer_a), "d"(8U)
+                         : "memory");
+    __asm__ __volatile__("int $0x80" : "=a"(seek_ret) : "a"(SYS_SEEK), "b"(fd), "c"(0U), "d"(SYS_SEEK_SET) : "memory");
+    __asm__ __volatile__("int $0x80"
+                         : "=a"(read_b)
+                         : "a"(SYS_READ), "b"(fd), "c"((uint32_t)buffer_b), "d"(8U)
+                         : "memory");
+    __asm__ __volatile__("int $0x80" : "=a"(close_ret) : "a"(SYS_CLOSE), "b"(fd) : "memory");
+
+    __asm__ __volatile__("int $0x80" : "=a"(files_total) : "a"(SYS_FILE_COUNT) : "memory");
+    __asm__ __volatile__("int $0x80"
+                         : "=a"(name_len)
+                         : "a"(SYS_FILE_NAME), "b"(0U), "c"((uint32_t)name_buf), "d"((uint32_t)sizeof(name_buf))
+                         : "memory");
+    __asm__ __volatile__("int $0x80" : "=a"(file_size) : "a"(SYS_FILE_SIZE), "b"(0U) : "memory");
+    __asm__ __volatile__("int $0x80"
+                         : "=a"(file_size_by_name)
+                         : "a"(SYS_FILE_SIZE_BY_NAME), "b"((uint32_t)name)
+                         : "memory");
+    __asm__ __volatile__("int $0x80"
+                         : "=a"(files_pref)
+                         : "a"(SYS_FILE_COUNT_PREFIX), "b"((uint32_t)prefix_all)
+                         : "memory");
+    __asm__ __volatile__("int $0x80"
+                         : "=a"(pref_name_len)
+                         : "a"(SYS_FILE_NAME_PREFIX),
+                           "b"((uint32_t)prefix_all),
+                           "c"(0U),
+                           "d"((uint32_t)pref_buf),
+                           "S"((uint32_t)sizeof(pref_buf))
+                         : "memory");
 
     if (read_a != read_b) {
       same = 0U;
@@ -214,6 +280,18 @@ static void run_syscall_smoke_test(void) {
     print_uint(close_ret);
     print(" seek_match=");
     print_uint(same);
+    print(" files=");
+    print_uint(files_total);
+    print(" first_name_len=");
+    print_uint(name_len);
+    print(" first_size=");
+    print_uint(file_size);
+    print(" first_size_by_name=");
+    print_uint(file_size_by_name);
+    print(" pref_count=");
+    print_uint(files_pref);
+    print(" pref_name_len=");
+    print_uint(pref_name_len);
     print(" ");
 
     for (uint32_t i = 0; i < read_a && i < 8U; i++) {
@@ -225,6 +303,243 @@ static void run_syscall_smoke_test(void) {
       }
     }
     printc('\n');
+  }
+}
+
+static void run_fs_listing_demo(void) {
+  static const char prefix_all[] = "";
+  static const char prefix_bin[] = "bin/";
+  static const char prefix_etc[] = "etc/";
+  uint32_t total;
+  uint32_t max_items;
+  uint32_t bin_count;
+  uint32_t etc_count;
+
+  if (initrd_is_ready() == 0U) {
+    println("LS demo: SKIP");
+    return;
+  }
+
+  total = syscall0(SYS_FILE_COUNT);
+  max_items = total < 6U ? total : 6U;
+
+  print("LS demo total=");
+  print_uint(total);
+  print(" showing=");
+  print_uint(max_items);
+  printc('\n');
+
+  for (uint32_t i = 0; i < max_items; i++) {
+    char name[64];
+    uint32_t name_len = syscall3(SYS_FILE_NAME, i, (uint32_t)name, (uint32_t)sizeof(name));
+    uint32_t file_size = syscall1(SYS_FILE_SIZE, i);
+
+    print(" - ");
+    print_uint(i);
+    print(": ");
+    if (name_len == (uint32_t)-1) {
+      print("<invalid>");
+    } else {
+      print(name);
+    }
+    print(" (");
+    print_uint(file_size);
+    print(")");
+    printc('\n');
+  }
+
+  bin_count = syscall1(SYS_FILE_COUNT_PREFIX, (uint32_t)prefix_bin);
+  etc_count = syscall1(SYS_FILE_COUNT_PREFIX, (uint32_t)prefix_etc);
+
+  print("LS demo prefix bin/=");
+  print_uint(bin_count);
+  print(" etc/=");
+  print_uint(etc_count);
+  printc('\n');
+
+  if (total > 0U) {
+    char first_any[64];
+    uint32_t any_len =
+        syscall4(SYS_FILE_NAME_PREFIX, (uint32_t)prefix_all, 0U, (uint32_t)first_any, (uint32_t)sizeof(first_any));
+
+    print("LS demo first(any)=");
+    if (any_len == (uint32_t)-1) {
+      print("<invalid>");
+    } else {
+      print(first_any);
+    }
+    printc('\n');
+  }
+}
+
+static int cstr_eq_local(const char* a, const char* b) {
+  uint32_t i = 0;
+
+  if (a == 0 || b == 0) {
+    return 0;
+  }
+
+  while (a[i] != '\0' && b[i] != '\0') {
+    if (a[i] != b[i]) {
+      return 0;
+    }
+    i++;
+  }
+
+  return a[i] == b[i];
+}
+
+static int cstr_starts_with_local(const char* str, const char* prefix) {
+  uint32_t i = 0;
+
+  if (str == 0 || prefix == 0) {
+    return 0;
+  }
+
+  while (prefix[i] != '\0') {
+    if (str[i] == '\0' || str[i] != prefix[i]) {
+      return 0;
+    }
+    i++;
+  }
+
+  return 1;
+}
+
+static const char* skip_spaces(const char* str) {
+  const char* p = str;
+  while (p != 0 && (*p == ' ' || *p == '\t')) {
+    p++;
+  }
+  return p;
+}
+
+static void print_prompt(void) { print("arctic> "); }
+
+static void cmd_ls(const char* prefix) {
+  uint32_t count = syscall1(SYS_FILE_COUNT_PREFIX, (uint32_t)prefix);
+  uint32_t show = count < 32U ? count : 32U;
+
+  print("ls count=");
+  print_uint(count);
+  printc('\n');
+
+  for (uint32_t i = 0; i < show; i++) {
+    char name[96];
+    uint32_t len = syscall4(SYS_FILE_NAME_PREFIX, (uint32_t)prefix, i, (uint32_t)name, (uint32_t)sizeof(name));
+
+    if (len == (uint32_t)-1) {
+      continue;
+    }
+
+    print(" - ");
+    print(name);
+    print(" (");
+    print_uint(syscall1(SYS_FILE_SIZE_BY_NAME, (uint32_t)name));
+    print(")");
+    printc('\n');
+  }
+
+  if (count > show) {
+    print("... and ");
+    print_uint(count - show);
+    println(" more");
+  }
+}
+
+static void cmd_cat(const char* path) {
+  uint32_t fd;
+  char buf[64];
+
+  if (path == 0 || path[0] == '\0') {
+    println("cat: missing path");
+    return;
+  }
+
+  fd = syscall1(SYS_OPEN, (uint32_t)path);
+  if (fd == (uint32_t)-1) {
+    println("cat: open failed");
+    return;
+  }
+
+  while (1) {
+    uint32_t read_count = syscall3(SYS_READ, fd, (uint32_t)buf, (uint32_t)sizeof(buf));
+
+    if (read_count == (uint32_t)-1 || read_count == 0U) {
+      break;
+    }
+
+    (void)syscall3(SYS_WRITE, 1U, (uint32_t)buf, read_count);
+  }
+
+  (void)syscall1(SYS_CLOSE, fd);
+  printc('\n');
+}
+
+static void run_builtin_shell(void) {
+  char line[128];
+  uint32_t line_len = 0;
+
+  println("Shell: help, ls [prefix], cat <path>, clear");
+  print_prompt();
+
+  while (1) {
+    char c;
+
+    if (keyboard_pop_char(&c) == 0) {
+      continue;
+    }
+
+    if (c == '\r') {
+      continue;
+    }
+
+    if (c == '\n') {
+      const char* cmd;
+
+      line[line_len] = '\0';
+      cmd = skip_spaces(line);
+
+      if (cmd[0] == '\0') {
+        print_prompt();
+        line_len = 0;
+        continue;
+      }
+
+      if (cstr_eq_local(cmd, "help") != 0) {
+        println("help: show commands");
+        println("ls [prefix]: list initrd files (optional prefix)");
+        println("cat <path>: print file content");
+        println("clear: clear screen");
+      } else if (cstr_eq_local(cmd, "clear") != 0) {
+        clear();
+      } else if (cstr_starts_with_local(cmd, "ls") != 0 && (cmd[2] == '\0' || cmd[2] == ' ' || cmd[2] == '\t')) {
+        const char* arg = skip_spaces(cmd + 2);
+        cmd_ls(arg);
+      } else if (cstr_starts_with_local(cmd, "cat") != 0 && (cmd[3] == ' ' || cmd[3] == '\t')) {
+        const char* arg = skip_spaces(cmd + 3);
+        cmd_cat(arg);
+      } else {
+        print("unknown command: ");
+        print(cmd);
+        printc('\n');
+      }
+
+      line_len = 0;
+      print_prompt();
+      continue;
+    }
+
+    if (c == '\b') {
+      if (line_len > 0U) {
+        line_len--;
+      }
+      continue;
+    }
+
+    if (c >= 32 && c <= 126 && line_len + 1U < (uint32_t)sizeof(line)) {
+      line[line_len++] = c;
+    }
   }
 }
 
@@ -314,19 +629,19 @@ static void run_elf_smoke_test(void) {
 #endif
 
 #if ELF_VADDR_LOAD_ON_BOOT
-  if (elf_load_virtual_identity_from_vfs(name, &vaddr_entry, &vaddr_segments, &vaddr_bytes) != 0U) {
-    print("ELF vaddr: OK entry=");
-    print_uint(vaddr_entry);
-    print(" seg=");
-    print_uint(vaddr_segments);
-    print(" bytes=");
-    print_uint(vaddr_bytes);
-    printc('\n');
-  } else {
-    println("ELF vaddr: FAIL");
-  }
+      if (elf_load_virtual_identity_from_vfs(name, &vaddr_entry, &vaddr_segments, &vaddr_bytes) != 0U) {
+        print("ELF vaddr: OK entry=");
+        print_uint(vaddr_entry);
+        print(" seg=");
+        print_uint(vaddr_segments);
+        print(" bytes=");
+        print_uint(vaddr_bytes);
+        printc('\n');
+      } else {
+        println("ELF vaddr: FAIL");
+      }
 #else
-  println("ELF vaddr: disabled");
+      println("ELF vaddr: disabled");
 #endif
       return;
     }
@@ -427,9 +742,8 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info) {
   println("OK");
 
   run_syscall_smoke_test();
+  run_fs_listing_demo();
 
   println("Ready! Type something:");
-
-  while (1) {
-  }
+  run_builtin_shell();
 }

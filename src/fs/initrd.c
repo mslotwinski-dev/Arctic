@@ -96,6 +96,23 @@ static int cstr_eq(const char* a, const char* b) {
   return a[i] == b[i];
 }
 
+static int cstr_has_prefix(const char* str, const char* prefix) {
+  uint32_t i = 0;
+
+  if (str == 0 || prefix == 0) {
+    return 0;
+  }
+
+  while (prefix[i] != '\0') {
+    if (str[i] == '\0' || str[i] != prefix[i]) {
+      return 0;
+    }
+    i++;
+  }
+
+  return 1;
+}
+
 static int tar_header_is_empty(const tar_header_t* header) {
   const uint8_t* raw = (const uint8_t*)header;
   for (uint32_t i = 0; i < 512; i++) {
@@ -220,10 +237,69 @@ const void* initrd_get_file_data(const char* name, uint32_t* size) {
   return 0;
 }
 
+uint8_t initrd_get_file_size_by_name(const char* name, uint32_t* size) {
+  if (size == 0 || initrd_ready == 0 || initrd_files == 0 || name == 0) {
+    return 0;
+  }
+
+  for (uint32_t i = 0; i < initrd_files_count; i++) {
+    if (cstr_eq(initrd_files[i].name, name)) {
+      *size = initrd_files[i].size;
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
 const char* initrd_get_file_name(uint32_t index) {
   if (initrd_ready == 0 || initrd_files == 0 || index >= initrd_files_count) {
     return 0;
   }
 
   return initrd_files[index].name;
+}
+
+uint8_t initrd_get_file_size(uint32_t index, uint32_t* size) {
+  if (size == 0 || initrd_ready == 0 || initrd_files == 0 || index >= initrd_files_count) {
+    return 0;
+  }
+
+  *size = initrd_files[index].size;
+  return 1;
+}
+
+uint32_t initrd_count_prefix(const char* prefix) {
+  uint32_t count = 0;
+
+  if (prefix == 0 || initrd_ready == 0 || initrd_files == 0) {
+    return 0;
+  }
+
+  for (uint32_t i = 0; i < initrd_files_count; i++) {
+    if (cstr_has_prefix(initrd_files[i].name, prefix) != 0) {
+      count++;
+    }
+  }
+
+  return count;
+}
+
+const char* initrd_get_file_name_by_prefix(const char* prefix, uint32_t index) {
+  uint32_t seen = 0;
+
+  if (prefix == 0 || initrd_ready == 0 || initrd_files == 0) {
+    return 0;
+  }
+
+  for (uint32_t i = 0; i < initrd_files_count; i++) {
+    if (cstr_has_prefix(initrd_files[i].name, prefix) != 0) {
+      if (seen == index) {
+        return initrd_files[i].name;
+      }
+      seen++;
+    }
+  }
+
+  return 0;
 }

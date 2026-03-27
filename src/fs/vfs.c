@@ -54,17 +54,10 @@ uint32_t vfs_seek(vfs_file_t* file, int32_t offset, uint32_t whence) {
   }
 
   switch (whence) {
-    case VFS_SEEK_SET:
-      base = 0;
-      break;
-    case VFS_SEEK_CUR:
-      base = (int64_t)file->position;
-      break;
-    case VFS_SEEK_END:
-      base = (int64_t)file->size;
-      break;
-    default:
-      return (uint32_t)-1;
+    case VFS_SEEK_SET: base = 0; break;
+    case VFS_SEEK_CUR: base = (int64_t)file->position; break;
+    case VFS_SEEK_END: base = (int64_t)file->size; break;
+    default: return (uint32_t)-1;
   }
 
   target = base + (int64_t)offset;
