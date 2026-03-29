@@ -8,6 +8,25 @@ volatile char* video_memory = (volatile char*)0xB8000;
 int cursor_x = 0;
 int cursor_y = 0;
 
+/**
+ * @brief Update VGA hardware cursor position via I/O ports.
+ * Cursor position in VGA is 16-bit linear offset (y * 80 + x).
+ */
+static void update_hardware_cursor(void) {
+  unsigned int pos = cursor_y * VGA_WIDTH + cursor_x;
+  unsigned char pos_high = (pos >> 8) & 0xFF;
+  unsigned char pos_low = pos & 0xFF;
+  
+  /* outb requires: data in %al (8-bit), port as immediate or %dx */
+  /* Write cursor position high byte (register 14) */
+  __asm__ __volatile__("outb %b0, $0x3d4" : : "a"(14));
+  __asm__ __volatile__("outb %b0, $0x3d5" : : "a"((int)pos_high));
+  
+  /* Write cursor position low byte (register 15) */
+  __asm__ __volatile__("outb %b0, $0x3d4" : : "a"(15));
+  __asm__ __volatile__("outb %b0, $0x3d5" : : "a"((int)pos_low));
+}
+
 void clear(void) {
   for (int y = 0; y < VGA_HEIGHT; y++) {
     for (int x = 0; x < VGA_WIDTH; x++) {
@@ -18,6 +37,7 @@ void clear(void) {
   }
   cursor_x = 0;
   cursor_y = 0;
+  update_hardware_cursor();
 }
 
 void printc(const char c) {
@@ -36,6 +56,7 @@ void printc(const char c) {
     int index = (cursor_y * VGA_WIDTH + cursor_x) * 2;
     video_memory[index] = ' ';
     video_memory[index + 1] = 0x0F;
+    update_hardware_cursor();
     return;
   }
 
@@ -62,6 +83,7 @@ void printc(const char c) {
       }
       cursor_y = VGA_HEIGHT - 1;
     }
+    update_hardware_cursor();
     return;
   }
 
@@ -98,6 +120,7 @@ void printc(const char c) {
       cursor_y = VGA_HEIGHT - 1;
     }
   }
+  update_hardware_cursor();
 }
 
 void print(const char* str) {
@@ -114,6 +137,7 @@ void println(const char* str) {
 void set_cursor_position(int x, int y) {
   cursor_x = x;
   cursor_y = y;
+  update_hardware_cursor();
 }
 
 void show_cursor_pos(void) {

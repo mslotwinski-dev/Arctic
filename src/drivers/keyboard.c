@@ -121,7 +121,7 @@ void keyboard_handler(void) {
 
     if (c != 0) {
       keyboard_push_char(c);
-      printc(c);
+      /* Shell handles all character echo (including special chars like backspace) */
     }
   }
 

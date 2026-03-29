@@ -414,7 +414,20 @@ static const char* skip_spaces(const char* str) {
   return p;
 }
 
-static void print_prompt(void) { print("arctic> "); }
+/* Global current drive (disk A) */
+static char current_drive = 'A';
+static uint32_t prompt_len = 0;
+
+/**
+ * @brief Shell input buffer tracking for proper cursor positioning
+ * (In VGA text mode, cursor is automatically displayed at current write position)
+ */
+
+static void print_prompt(void) {
+  printc(current_drive);
+  print(":> ");
+  prompt_len = 3; /* drive letter, colon, >, space = 3 chars */
+}
 
 static void cmd_ls(const char* prefix) {
   uint32_t count = syscall1(SYS_FILE_COUNT_PREFIX, (uint32_t)prefix);
@@ -476,11 +489,35 @@ static void cmd_cat(const char* path) {
   printc('\n');
 }
 
+static void cmd_cd(const char* arg) {
+  if (arg == 0 || arg[0] == '\0') {
+    print("Current drive: ");
+    printc(current_drive);
+    println(":");
+    return;
+  }
+
+  /* Simple drive switching: A:, B:, C:, etc. */
+  if (arg[1] == ':' && arg[2] == '\0' && arg[0] >= 'A' && arg[0] <= 'Z') {
+    current_drive = arg[0];
+    print("Switched to drive: ");
+    printc(current_drive);
+    println(":");
+  } else if (arg[0] >= 'a' && arg[0] <= 'z' && arg[1] == ':' && arg[2] == '\0') {
+    current_drive = (char)(arg[0] - 32); /* Convert to uppercase */
+    print("Switched to drive: ");
+    printc(current_drive);
+    println(":");
+  } else {
+    println("cd: only single drive letter supported (e.g., A:, B:, C:)");
+  }
+}
+
 static void run_builtin_shell(void) {
   char line[128];
   uint32_t line_len = 0;
 
-  println("Shell: help, ls [prefix], cat <path>, clear");
+  println("Shell: help, ls [prefix], cat <path>, cd <drive>, clear");
   print_prompt();
 
   while (1) {
@@ -510,6 +547,7 @@ static void run_builtin_shell(void) {
         println("help: show commands");
         println("ls [prefix]: list initrd files (optional prefix)");
         println("cat <path>: print file content");
+        println("cd <drive>: change disk (e.g., A:, B:, C:)");
         println("clear: clear screen");
       } else if (cstr_eq_local(cmd, "clear") != 0) {
         clear();
@@ -519,6 +557,9 @@ static void run_builtin_shell(void) {
       } else if (cstr_starts_with_local(cmd, "cat") != 0 && (cmd[3] == ' ' || cmd[3] == '\t')) {
         const char* arg = skip_spaces(cmd + 3);
         cmd_cat(arg);
+      } else if (cstr_starts_with_local(cmd, "cd") != 0 && (cmd[2] == ' ' || cmd[2] == '\t' || cmd[2] == '\0')) {
+        const char* arg = skip_spaces(cmd + 2);
+        cmd_cd(arg);
       } else {
         print("unknown command: ");
         print(cmd);
@@ -531,14 +572,20 @@ static void run_builtin_shell(void) {
     }
 
     if (c == '\b') {
+      /* Backspace: erase last character only if text exists (not the prompt) */
       if (line_len > 0U) {
         line_len--;
+        /* printc('\b') handles cursor movement and character erasure automatically */
+        printc('\b');
       }
+      /* Prompt itself (A:>) cannot be erased */
       continue;
     }
 
     if (c >= 32 && c <= 126 && line_len + 1U < (uint32_t)sizeof(line)) {
       line[line_len++] = c;
+      /* Echo visible character to terminal */
+      printc(c);
     }
   }
 }
